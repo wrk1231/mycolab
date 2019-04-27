@@ -10,6 +10,9 @@ import numpy as np
 import urllib2
 import string
 import calendar
+import sqlite3
+from sqlite3 import Error
+
 
 def text_parser(doc_list):
     groupname_list = []
@@ -78,24 +81,48 @@ def text_parser(doc_list):
     df = pd.DataFrame({'groupname' : groupname_list, 'submissiontype':submissiontype_list, 'monthend':monthend_list, 'prospectus':prospectuses})
     return df   
 
-def create_sql_table(df):
-    #Create SQL table to install information
-    from sqlalchemy import create_engine
-    engine = create_engine('sqlite://', echo=False)
-    df.to_sql('fund_prospectuses', con=engine)
-    
-    return engine
 
+def create_connection(db_file):
+    """ create a database connection to a SQLite database """
+    try:
+        conn = sqlite3.connect(db_file)
+        return conn
+    except Error as e:
+        print(e)    
+    return None
 
+def create_table(conn):
+    """ create a table in a SQLite database """
+    try:
+        # command to create sql table
+        create_table_sql =  """CREATE TABLE FUND(  GROUPNAME             text     NOT NULL,
+                                                   SUBMISSIONTYPE        text     NOT NULL,
+                                                   MONTHEND              text     NOT NULL,
+                                                   PROSPECTUS            text     NOT NULL
+                                                );"""
+
+        cursor = conn.cursor()
+        cursor.execute(create_table_sql)        
+    except Error as e:
+        print(e)
+
+def create_fund(conn, fund):
+    sql = ''' INSERT INTO FUND(GROUPNAME,SUBMISSIONTYPE,MONTHEND,PROSPECTUS)
+              VALUES(?,?,?,?) '''
+    cur = conn.cursor()
+    cur.execute(sql, fund)
+    return cur.lastrowid
 
 if __name__ == '__main__':
     #access to CSV
     doc_list = pd.read_csv("RA_test.csv")
-    #print(doc_list)
     
     # Parse text from EDGAR links
     df = text_parser(doc_list)
-    
-    #Test the SQL table
-    engine = create_sql_table(df)
-    print (engine.execute("SELECT groupname, monthend FROM fund_prospectuses").fetchall())
+
+    RA_db = create_connection("RA.db")
+    create_table(RA_db)
+    with RA_db:
+        for i in len(df):
+            fund = (df.iloc[i]['groupname'],df.iloc[i]['submissiontype'],str(df.iloc[i]['monthend']),df.iloc[i]['prospectus'])
+            create_fund(test,fund)
